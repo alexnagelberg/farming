@@ -85,12 +85,14 @@ void loop() {
     measuredvbat *= 2;    // we divided by 2, so multiply back
     measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
     measuredvbat /= 1024; // convert to voltage
-  
+
+    float bat_percent = ((measuredvbat-3.5)/.7)*100;
+    
     //uint8_t buf[sizeof(capread) + sizeof(measuredvbat) + 1];
     //uint8_t len = sizeof(buf);
-    String buf = "" + String(capread, DEC) + " " + String(measuredvbat, 3);
+    String buf = "" + String(capread, DEC) + " " + String(measuredvbat, 3) + " " + String(bat_percent, 2) + "%";
     
-    unsigned int c_buf_len = 4 + 5 + 5; // capread + battery + padding
+    unsigned int c_buf_len = 4 + 5 + 8 + 5; // capread + battery + percent + padding
     uint8_t c_buf[c_buf_len];
     buf.getBytes(c_buf, c_buf_len);
     c_buf[buf.length()] = 0;
