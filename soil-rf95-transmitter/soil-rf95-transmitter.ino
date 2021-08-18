@@ -20,7 +20,9 @@
 
 #define VBATPIN A7
 #define LED 13
+#define MOTOR 11
 
+#define MOISTURE_THRESHOLD 600
 #define SLEEP_INTERVAL_SECONDS 50
 RTCZero rtc;
 Adafruit_seesaw ss;
@@ -37,6 +39,11 @@ bool wakeup = false;
 
 void setup() 
 {
+  // TODO: put a pull-down on this? or possible with code?
+  // (make sure motor doesn't turn on with floating before setup starts)
+  pinMode(MOTOR, OUTPUT);
+  digitalWrite(MOTOR, LOW);
+  
   Serial.begin(9600);
   rtc.begin();
   // Soil setup
@@ -47,6 +54,12 @@ void setup()
     Serial.print("seesaw started! version: ");
     Serial.println(ss.getVersion(), HEX);
   }
+
+  /*
+  pinMode(led, OUTPUT);     
+  Serial.begin(9600);
+  while (!Serial) ; // Wait for serial port to be available
+  */
   
   if (!rf95.init())
     Serial.println("init failed");  
@@ -75,8 +88,9 @@ void setup()
 
 void loop() {
   if (wakeup) {
-    wakeup = false;
 
+    //digitalWrite(LED, HIGH);
+    
     // Read soil sensor
     uint16_t capread = ss.touchRead(0);
   
@@ -85,14 +99,12 @@ void loop() {
     measuredvbat *= 2;    // we divided by 2, so multiply back
     measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
     measuredvbat /= 1024; // convert to voltage
-
-    float bat_percent = ((measuredvbat-3.5)/.7)*100;
-    
+    float bat_percent = ((measuredvbat-3.3)/0.9)*100;
     //uint8_t buf[sizeof(capread) + sizeof(measuredvbat) + 1];
     //uint8_t len = sizeof(buf);
-    String buf = "" + String(capread, DEC) + " " + String(measuredvbat, 3) + " " + String(bat_percent, 2) + "%";
+    String buf = "" + String(capread, DEC) + " " + String(measuredvbat, 3) + " " + String(bat_percent, 2);
     
-    unsigned int c_buf_len = 4 + 5 + 8 + 5; // capread + battery + percent + padding
+    unsigned int c_buf_len = 4 + 5 + 7 + 5; // capread + battery + percent + padding
     uint8_t c_buf[c_buf_len];
     buf.getBytes(c_buf, c_buf_len);
     c_buf[buf.length()] = 0;
@@ -102,13 +114,20 @@ void loop() {
     Serial.println((char *)c_buf);
     Serial.print("Length: ");
     Serial.println(buf.length());
-    
-    //delay(1000);
-    // Reset clock, go back to sleep
-    rf95.sleep();
-    rtc.setTime(0,0,0);
-    rtc.setAlarmSeconds(SLEEP_INTERVAL_SECONDS);
-    rtc.standbyMode();
+
+    // Turn on motor as long as moisture bellow threshold
+    if (capread < MOISTURE_THRESHOLD) {
+      digitalWrite(MOTOR, HIGH);
+      delay(5000);
+    } else {
+      wakeup = false;
+      digitalWrite(MOTOR, LOW);
+      // Reset clock, go back to sleep
+      rf95.sleep();
+      rtc.setTime(0,0,0);
+      rtc.setAlarmSeconds(SLEEP_INTERVAL_SECONDS);
+      rtc.standbyMode();
+    }
   }
 }
 
